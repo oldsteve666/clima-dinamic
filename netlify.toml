@@ -1,24 +1,53 @@
 [build]
   publish = "."
 
+# Compressione automatica Brotli/Gzip
+[build.processing]
+  skip_processing = false
+[build.processing.css]
+  bundle = false
+  minify = true
+[build.processing.js]
+  bundle = false
+  minify = true
+[build.processing.html]
+  pretty_urls = false
+[build.processing.images]
+  compress = true
+
+# Cache headers aggressivi per asset statici
 [[headers]]
-  for = "/*"
+  for = "/css/*"
   [headers.values]
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# HTML sempre fresco
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
+# Security headers
 [[headers]]
-  for = "/css/*"
+  for = "/*"
   [headers.values]
-    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
 
-[[headers]]
-  for = "/js/*"
-  [headers.values]
-    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
