@@ -1,16 +1,26 @@
 const MONTHS_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 const MONTHS_SHORT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 
-// Weather code -> emoji
+// ✅ Mappa COMPLETA dei codici WMO di Open-Meteo (nessun codice mancante)
 const WMO = {
-  0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',
-  51:'🌦️',53:'🌦️',55:'🌦️',
-  61:'🌧️',63:'🌧️',65:'🌧️',
-  71:'🌨️',73:'🌨️',75:'🌨️',77:'❄️',
-  80:'🌦️',81:'🌧️',82:'⛈️',
-  85:'🌨️',86:'🌨️',
-  95:'⛈️',96:'⛈️',99:'⛈️'
+  0:'☀️', 1:'🌤️', 2:'⛅', 3:'☁️',
+  45:'🌫️', 48:'🌫️',
+  51:'🌦️', 53:'🌦️', 55:'🌧️',
+  56:'🌧️', 57:'🌧️',           // pioggia gelata leggera/densa
+  61:'🌧️', 63:'🌧️', 65:'🌧️',
+  66:'🌧️', 67:'🌧️',           // pioggia gelata
+  71:'🌨️', 73:'🌨️', 75:'🌨️', 77:'🌨️',
+  80:'🌦️', 81:'🌧️', 82:'🌧️',
+  85:'🌨️', 86:'🌨️',
+  95:'⛈️', 96:'⛈️', 99:'⛈️'
 };
+
+// ✅ Getter robusto: gestisce null, undefined, stringhe, decimali e codici fuori mappa
+function getWeatherIcon(code){
+  const c = Number(code);
+  if (Number.isFinite(c) && WMO[c]) return WMO[c];
+  return '🌡️'; // fallback sicuro
+}
 
 export function populateMonthSelect(sel){
   sel.innerHTML = '';
@@ -45,12 +55,12 @@ export function renderForecastGrid(daily){
   daily.time.forEach((t,i)=>{
     const d = new Date(t);
     const isToday = d.toDateString() === today.toDateString();
-    const code = daily.weathercode?.[i] ?? 0;
+    const icon = getWeatherIcon(daily.weathercode?.[i]);
     const card = document.createElement('div');
     card.className = 'day-card';
     card.innerHTML = `
       <div class="day-card__date">${isToday?'Oggi':d.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})}</div>
-      <div class="day-card__icon">${WMO[code]||'🌡️'}</div>
+      <div class="day-card__icon">${icon}</div>
       <div class="day-card__temp">${Math.round(daily.temperature_2m_max[i])}° <small>/ ${Math.round(daily.temperature_2m_min[i])}°</small></div>
       <div class="day-card__meta">🌧️ ${daily.precipitation_sum[i]??0} mm · ${daily.precipitation_probability_max[i]??0}%</div>
     `;
@@ -104,7 +114,7 @@ export function setupTabs(){
       panels.forEach(p=>{
         p.hidden = p.dataset.panel !== target;
       });
-      // TRICK: forza Chart.js a ricalcolare le dimensioni dei grafici nel tab appena mostrato
+      // forza Chart.js a ricalcolare le dimensioni dei grafici nel tab appena mostrato
       setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
     });
   });
