@@ -67,7 +67,7 @@ async function renderForecast() {
     charts.renderForecastTemp(dailyLabels, data.daily.temperature_2m_max, data.daily.temperature_2m_min);
     charts.renderForecastPrecip(dailyLabels, data.daily.precipitation_sum, data.daily.precipitation_probability_max);
 
-    const humAvg = data.daily.time.map((t, i) => {
+    const humAvg = data.daily.time.map((t) => {
       const day = t;
       let sum = 0, count = 0;
       for (let j = 0; j < data.hourly.time.length; j++) {
@@ -93,10 +93,21 @@ async function refreshAll() {
     renderProfile();
     renderYearly();
     ui.setLastUpdate();
-    ui.showToast('Dati aggiornati', 'success');
+
+    // ✅ Messaggi intelligenti in base a cosa è successo
+    const meta = state.archive._meta;
+    if (meta && meta.rateLimited) {
+      ui.showToast('⚠️ Limite API raggiunto: mostrati i dati in cache', 'warn', 6000);
+    } else if (meta && meta.failedYears.length) {
+      ui.showToast(`⚠️ Anni non disponibili: ${meta.failedYears.join(', ')}`, 'warn', 6000);
+    } else if (meta && meta.networkCount === 0) {
+      ui.showToast('⚡ Dati caricati dalla cache', 'success');
+    } else {
+      ui.showToast(`Dati aggiornati (${meta.networkCount} anni scaricati)`, 'success');
+    }
   } catch (e) {
     console.error(e);
-    ui.showToast('Errore caricamento: ' + e.message, 'error');
+    ui.showToast('Errore caricamento: ' + e.message, 'error', 8000);
   } finally {
     ui.hideLoader();
   }
@@ -155,7 +166,7 @@ async function init() {
     console.log('✅ [INIT] Auto-refresh attivato');
   } catch (e) {
     console.error('❌ [INIT] Errore critico:', e);
-    ui.hideLoader(); 
+    ui.hideLoader();
     ui.showToast('Errore inizializzazione: ' + e.message, 'error');
   }
 }
