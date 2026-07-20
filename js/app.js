@@ -137,13 +137,8 @@ function bindControls() {
   });
 }
 
-/* ==========================================
-   AVVIO APPLICAZIONE (con debug e protezioni)
-   ========================================== */
-
 async function init() {
   console.log('🚀 [INIT] Avvio applicazione...');
-  
   try {
     document.getElementById('year').textContent = new Date().getFullYear();
     ui.setupTabs();
