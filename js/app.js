@@ -3,10 +3,12 @@ import * as charts from './charts.js';
 import * as ui from './ui.js';
 import { cacheClear } from './cache.js';
 
+const currentYear = new Date().getFullYear();
+
 const state = {
-  month: new Date().getMonth()+1,
+  month: new Date().getMonth() + 1,
   yearFrom: 2000,
-  yearTo: new Date().getFullYear(),
+  yearTo: currentYear, // ← Usa l'anno corrente, non un anno futuro fisso
   archive: null
 };
 
@@ -102,25 +104,27 @@ async function refreshAll(){
   }
 }
 
-function bindControls(){
+function bindControls() {
   const selMonth = document.getElementById('selMonth');
   const selFrom = document.getElementById('selYearFrom');
   const selTo = document.getElementById('selYearTo');
 
   ui.populateMonthSelect(selMonth);
-  ui.populateYearSelect(selFrom, 1965, 2026, state.yearFrom);
-  ui.populateYearSelect(selTo, 1965, 2026, state.yearTo);
+  
+  // ← Modifica qui: limita gli anni tra 1965 e l'anno corrente
+  ui.populateYearSelect(selFrom, 1965, currentYear, state.yearFrom);
+  ui.populateYearSelect(selTo, 1965, currentYear, state.yearTo);
 
-  selMonth.addEventListener('change', ()=>{
+  selMonth.addEventListener('change', () => {
     state.month = +selMonth.value;
     renderMonthDaily();
     renderMonthYearly();
   });
 
-  const updateYears = debounce(async ()=>{
+  const updateYears = debounce(async () => {
     state.yearFrom = +selFrom.value;
     state.yearTo = +selTo.value;
-    if(state.yearFrom > state.yearTo){
+    if (state.yearFrom > state.yearTo) {
       state.yearTo = state.yearFrom;
       selTo.value = state.yearTo;
     }
@@ -131,9 +135,9 @@ function bindControls(){
   selTo.addEventListener('change', updateYears);
 
   document.getElementById('btnRefresh').addEventListener('click', refreshAll);
-  document.getElementById('btnClearCache').addEventListener('click', async ()=>{
+  document.getElementById('btnClearCache').addEventListener('click', async () => {
     await cacheClear();
-    ui.showToast('Cache svuotata','success');
+    ui.showToast('Cache svuotata', 'success');
   });
 }
 

@@ -23,15 +23,19 @@ export function populateMonthSelect(sel){
   sel.value = new Date().getMonth()+1;
 }
 
-export function populateYearSelect(sel, from, to, selected){
+export function populateYearSelect(sel, from, to, selected) {
   sel.innerHTML = '';
-  for(let y=to; y>=from; y--){
+  const currentYear = new Date().getFullYear();
+  const maxYear = Math.min(to, currentYear);
+  const minYear = Math.max(from, 1940); // Open-Meteo archive arriva fino al 1940
+  
+  for (let y = maxYear; y >= minYear; y--) {
     const opt = document.createElement('option');
     opt.value = y;
     opt.textContent = y;
     sel.appendChild(opt);
   }
-  sel.value = selected ?? to;
+  sel.value = selected ?? maxYear;
 }
 
 export function renderForecastGrid(daily){
