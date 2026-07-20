@@ -1,138 +1,235 @@
-window.Charts = (() => {
-  if (!window.Chart) return { unavailable: true };
+// Tema globale Chart.js dark
+const COLORS = {
+  temp: '#f87171',
+  tempMax: '#f87171',
+  tempMin: '#60a5fa',
+  tempAvg: '#fbbf24',
+  precip: '#22d3ee',
+  hum: '#34d399',
+  grid: 'rgba(255,255,255,0.06)',
+  tick: '#9a9ab0',
+  tooltip: '#1b1b2a'
+};
 
-  const C = CONFIG.colors;
-  Chart.defaults.font.family = "'JetBrains Mono', ui-monospace, monospace";
-  Chart.defaults.font.size = 10;
-  Chart.defaults.color = '#7d92b3';
+const chartInstances = new Map();
 
-  const inst = {};
-  const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; };
-  const grad = color => ctx => {
-    const { ctx: c, chartArea } = ctx.chart;
-    if (!chartArea) return hexA(color, .18);
-    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0, hexA(color, .34)); g.addColorStop(1, hexA(color, 0));
-    return g;
-  };
-
-  const line = (label, data, color, extra = {}) => ({
-    type: 'line', label, data, borderColor: color, backgroundColor: 'transparent',
-    borderWidth: 2, tension: .35, pointRadius: 0, pointHoverRadius: 4,
-    pointHoverBackgroundColor: color, spanGaps: true, ...extra
-  });
-  const area = (label, data, color, extra = {}) => ({ ...line(label, data, color, extra), fill: true, backgroundColor: grad(color) });
-  const bar  = (label, data, color, extra = {}) => ({
-    type: 'bar', label, data, backgroundColor: hexA(color, .7), hoverBackgroundColor: color,
-    borderRadius: 3, borderSkipped: false, maxBarThickness: 24, ...extra
-  });
-  const dashed = (label, data, color) => ({
-    type: 'line', label, data, borderColor: hexA(color, .8), borderDash: [6, 5],
-    borderWidth: 1.5, pointRadius: 0, tension: .2, spanGaps: true
-  });
-
-  const fmtVal = (m, v) => v == null ? '—'
-    : m === 'temp' ? (+v).toFixed(1) + ' °C'
-    : m === 'rain' ? (+v).toFixed(1) + ' mm'
-    : Math.round(v) + ' %';
-
-  function scales({ y } = {}) {
-    const s = {
-      x: { grid: { display: false }, border: { color: hexA('#94a8c6', .18) },
-           ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
-      y: { grid: { color: hexA('#94a8c6', .08) }, border: { display: false }, ticks: { padding: 6 } }
-    };
-    if (y) s.y.title = { display: true, text: y, color: '#5c7397', font: { size: 9 } };
-    return s;
-  }
-
-  function options(sc, { legend = false, metric = 'temp' } = {}) {
-    return {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 650, easing: 'easeOutQuart' },
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: legend
-          ? { display: true, position: 'top', align: 'end',
-              labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 6, boxHeight: 6, padding: 14, color: '#94a8c6' } }
-          : { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(8,15,29,.96)', borderColor: '#24405f', borderWidth: 1,
-          titleColor: '#e9f1fb', bodyColor: '#b9c9e0', padding: 12, cornerRadius: 10,
-          boxPadding: 5, usePointStyle: true,
-          callbacks: { label: c => ` ${c.dataset.label}: ${fmtVal(metric, c.parsed.y)}` }
-        }
-      },
-      scales: sc
-    };
-  }
-
-  function draw(id, labels, datasets, sc, o = {}) {
-    const el = document.getElementById(id);
-    if (!inst[id]) {
-      inst[id] = new Chart(el, { type: 'bar', data: { labels, datasets }, options: options(sc, o) });
-    } else {
-      const ch = inst[id];
-      ch.data.labels = labels;
-      ch.data.datasets = datasets;
-      ch.options = options(sc, o);
-      ch.update();
-    }
-    el.closest('.chart-box')?.classList.add('ready');
-  }
-
-  /* regressione lineare per la linea di tendenza */
-  function trendOf(values) {
-    const pts = values.map((v, i) => [i, v]).filter(p => p[1] != null);
-    if (pts.length < 4) return null;
-    const n = pts.length; let sx = 0, sy = 0, sxy = 0, sxx = 0;
-    for (const [x, yv] of pts) { sx += x; sy += yv; sxy += x * yv; sxx += x * x; }
-    const den = n * sxx - sx * sx;
-    if (!den) return null;
-    const b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n;
-    return values.map((_, i) => +(a + b * i).toFixed(2));
-  }
-
+function baseOptions(yTitle, unit=''){
   return {
-    renderForecast(p, m) {
-      const ds = m === 'rain' ? [bar('Precipitazioni', p.rain, C.rain)]
-        : m === 'hum' ? [area('Umidità relativa', p.hum, C.hum)]
-        : [area('Temperatura', p.temp, C.temp)];
-      draw('chartForecast', p.labels, ds, scales({ y: m === 'rain' ? 'mm' : m === 'hum' ? '%' : '°C' }), { metric: m });
+    responsive:true,
+    maintainAspectRatio:false,
+    animation:{duration:600, easing:'easeOutQuart'},
+    interaction:{mode:'index', intersect:false},
+    plugins:{
+      legend:{
+        labels:{color:COLORS.tick, font:{size:11}, boxWidth:10, padding:12}
+      },
+      tooltip:{
+        backgroundColor:COLORS.tooltip,
+        borderColor:'rgba(255,255,255,0.1)',
+        borderWidth:1,
+        titleColor:'#fff',
+        bodyColor:'#e8e8f0',
+        padding:10,
+        cornerRadius:8,
+        displayColors:true,
+        callbacks:{
+          label:(ctx)=>`${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1) ?? '-'}${unit}`
+        }
+      }
     },
-    renderDaily(p, m) {
-      let ds, y;
-      if (m === 'rain')      { ds = [bar('Precipitazioni', p.rain, C.rain)]; y = 'mm'; }
-      else if (m === 'hum')  { ds = [area('Umidità media', p.hum, C.hum)];  y = '%'; }
-      else { ds = [line('T. max', p.tmax, C.temp),
-                   line('T. media', p.tmean, C.mean, { borderDash: [5, 4], borderWidth: 1.6 }),
-                   line('T. min', p.tmin, C.cold)]; y = '°C'; }
-      draw('chartDaily', p.labels, ds, scales({ y }), { metric: m, legend: m === 'temp' });
-    },
-    renderProfile(p, m) {
-      let ds, y;
-      if (m === 'rain')      { ds = [bar('Pioggia media/mese', p.rain, C.rain)]; y = 'mm'; }
-      else if (m === 'hum')  { ds = [area('Umidità media', p.hum, C.hum)];       y = '%'; }
-      else                   { ds = [area('T. media', p.temp, C.temp)];          y = '°C'; }
-      draw('chartProfile', p.labels, ds, scales({ y }), { metric: m });
-    },
-    renderAnnual(p, m) {
-      let ds, y, vals;
-      if (m === 'rain')      { vals = p.rain; ds = [bar('Precipitazioni totali', vals, C.rain)]; y = 'mm'; }
-      else if (m === 'hum')  { vals = p.hum;  ds = [area('Umidità media', vals, C.hum)];         y = '%'; }
-      else                   { vals = p.temp; ds = [area('T. media annua', vals, C.temp)];       y = '°C'; }
-      const tr = trendOf(vals);
-      if (tr) ds.push(dashed('Trend', tr, '#e9f1fb'));
-      draw('chartAnnual', p.labels, ds, scales({ y }), { metric: m, legend: !!tr });
-    },
-    renderMonthYears(p, m) {
-      let ds, y;
-      if (m === 'rain')      { ds = [bar('Pioggia del mese', p.rain, C.rain)]; y = 'mm'; }
-      else if (m === 'hum')  { ds = [area('Umidità media', p.hum, C.hum)];     y = '%'; }
-      else { ds = [line('T. max', p.tmax, C.temp),
-                   line('T. media', p.tmean, C.mean, { borderDash: [5, 4], borderWidth: 1.6 }),
-                   line('T. min', p.tmin, C.cold)]; y = '°C'; }
-      draw('chartMonthYears', p.labels, ds, scales({ y }), { metric: m, legend: m === 'temp' });
+    scales:{
+      x:{
+        ticks:{color:COLORS.tick, maxRotation:0, autoSkip:true, maxTicksLimit:10, font:{size:10}},
+        grid:{color:COLORS.grid}
+      },
+      y:{
+        title:{display:true, text:yTitle, color:COLORS.tick, font:{size:11}},
+        ticks:{color:COLORS.tick, font:{size:10}},
+        grid:{color:COLORS.grid}
+      }
     }
   };
-})();
+}
+
+function getOrCreate(canvasId, config){
+  const existing = chartInstances.get(canvasId);
+  if(existing){ existing.destroy(); }
+  const ctx = document.getElementById(canvasId);
+  if(!ctx) return null;
+  const chart = new Chart(ctx, config);
+  chartInstances.set(canvasId, chart);
+  return chart;
+}
+
+export function destroyAll(){
+  chartInstances.forEach(c=>c.destroy());
+  chartInstances.clear();
+}
+
+// ===== FORECAST =====
+export function renderForecastTemp(labels, max, min){
+  getOrCreate('chartForecastTemp', {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Max °C', data:max, borderColor:COLORS.tempMax, backgroundColor:'rgba(248,113,113,.15)', fill:true, tension:.35, pointRadius:0, borderWidth:2},
+        {label:'Min °C', data:min, borderColor:COLORS.tempMin, backgroundColor:'rgba(96,165,250,.15)', fill:true, tension:.35, pointRadius:0, borderWidth:2}
+      ]
+    },
+    options:baseOptions('°C','°C')
+  });
+}
+
+export function renderForecastPrecip(labels, precip, prob){
+  getOrCreate('chartForecastPrecip', {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Precipitazioni mm', data:precip, backgroundColor:COLORS.precip, borderRadius:4},
+        {label:'Probabilità %', data:prob, type:'line', borderColor:COLORS.hum, backgroundColor:'transparent', tension:.3, pointRadius:0, borderWidth:2, yAxisID:'y1'}
+      ]
+    },
+    options:{
+      ...baseOptions('mm','mm'),
+      scales:{
+        ...baseOptions('mm','mm').scales,
+        y1:{position:'right', title:{display:true,text:'%', color:COLORS.tick}, ticks:{color:COLORS.tick}, grid:{drawOnChartArea:false}, min:0, max:100}
+      }
+    }
+  });
+}
+
+export function renderForecastHum(labels, hum){
+  getOrCreate('chartForecastHum', {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{label:'Umidità %', data:hum, borderColor:COLORS.hum, backgroundColor:'rgba(52,211,153,.15)', fill:true, tension:.35, pointRadius:0, borderWidth:2}]
+    },
+    options:baseOptions('%','%')
+  });
+}
+
+// ===== MONTH DAILY =====
+export function renderMonthDailyTemp(labels, max, min){
+  const avg = max.map((v,i)=> v!=null && min[i]!=null ? (v+min[i])/2 : null);
+  getOrCreate('chartMonthDailyTemp', {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Max', data:max, borderColor:COLORS.tempMax, tension:.3, pointRadius:1, borderWidth:2},
+        {label:'Media', data:avg, borderColor:COLORS.tempAvg, borderDash:[4,4], tension:.3, pointRadius:0, borderWidth:2},
+        {label:'Min', data:min, borderColor:COLORS.tempMin, tension:.3, pointRadius:1, borderWidth:2}
+      ]
+    },
+    options:baseOptions('°C','°C')
+  });
+}
+
+export function renderMonthDailyPrecip(labels, data){
+  getOrCreate('chartMonthDailyPrecip', {
+    type:'bar',
+    data:{labels, datasets:[{label:'mm', data, backgroundColor:COLORS.precip, borderRadius:3}]},
+    options:baseOptions('mm','mm')
+  });
+}
+
+export function renderMonthDailyHum(labels, data){
+  getOrCreate('chartMonthDailyHum', {
+    type:'line',
+    data:{labels, datasets:[{label:'%', data, borderColor:COLORS.hum, backgroundColor:'rgba(52,211,153,.15)', fill:true, tension:.35, pointRadius:0, borderWidth:2}]},
+    options:baseOptions('%','%')
+  });
+}
+
+// ===== MONTH YEARLY =====
+export function renderMonthYearlyTemp(labels, max, avg, min){
+  getOrCreate('chartMonthYearlyTemp', {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Max', data:max, borderColor:COLORS.tempMax, tension:.3, pointRadius:2, borderWidth:2},
+        {label:'Media', data:avg, borderColor:COLORS.tempAvg, tension:.3, pointRadius:2, borderWidth:2},
+        {label:'Min', data:min, borderColor:COLORS.tempMin, tension:.3, pointRadius:2, borderWidth:2}
+      ]
+    },
+    options:baseOptions('°C','°C')
+  });
+}
+
+export function renderMonthYearlyPrecip(labels, data){
+  getOrCreate('chartMonthYearlyPrecip', {
+    type:'bar',
+    data:{labels, datasets:[{label:'mm', data, backgroundColor:COLORS.precip, borderRadius:4}]},
+    options:baseOptions('mm','mm')
+  });
+}
+
+export function renderMonthYearlyHum(labels, data){
+  getOrCreate('chartMonthYearlyHum', {
+    type:'line',
+    data:{labels, datasets:[{label:'%', data, borderColor:COLORS.hum, backgroundColor:'rgba(52,211,153,.15)', fill:true, tension:.35, pointRadius:2, borderWidth:2}]},
+    options:baseOptions('%','%')
+  });
+}
+
+// ===== PROFILE =====
+export function renderProfileTemp(labels, max, avg, min){
+  getOrCreate('chartProfileTemp', {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Max', data:max, backgroundColor:'rgba(248,113,113,.7)', borderRadius:4},
+        {label:'Media', data:avg, backgroundColor:'rgba(251,191,36,.7)', borderRadius:4},
+        {label:'Min', data:min, backgroundColor:'rgba(96,165,250,.7)', borderRadius:4}
+      ]
+    },
+    options:baseOptions('°C','°C')
+  });
+}
+
+export function renderProfilePrecip(labels, data){
+  getOrCreate('chartProfilePrecip', {
+    type:'bar',
+    data:{labels, datasets:[{label:'mm', data, backgroundColor:COLORS.precip, borderRadius:4}]},
+    options:baseOptions('mm','mm')
+  });
+}
+
+export function renderProfileHum(labels, data){
+  getOrCreate('chartProfileHum', {
+    type:'line',
+    data:{labels, datasets:[{label:'%', data, borderColor:COLORS.hum, backgroundColor:'rgba(52,211,153,.2)', fill:true, tension:.35, pointRadius:3, borderWidth:2}]},
+    options:baseOptions('%','%')
+  });
+}
+
+// ===== YEARLY =====
+export function renderYearlyTemp(labels, data){
+  getOrCreate('chartYearlyTemp', {
+    type:'line',
+    data:{labels, datasets:[{label:'°C', data, borderColor:COLORS.tempAvg, backgroundColor:'rgba(251,191,36,.15)', fill:true, tension:.3, pointRadius:2, borderWidth:2}]},
+    options:baseOptions('°C','°C')
+  });
+}
+
+export function renderYearlyPrecip(labels, data){
+  getOrCreate('chartYearlyPrecip', {
+    type:'bar',
+    data:{labels, datasets:[{label:'mm', data, backgroundColor:COLORS.precip, borderRadius:4}]},
+    options:baseOptions('mm','mm')
+  });
+}
+
+export function renderYearlyHum(labels, data){
+  getOrCreate('chartYearlyHum', {
+    type:'line',
+    data:{labels, datasets:[{label:'%', data, borderColor:COLORS.hum, backgroundColor:'rgba(52,211,153,.15)', fill:true, tension:.3, pointRadius:2, borderWidth:2}]},
+    options:baseOptions('%','%')
+  });
+}
