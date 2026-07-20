@@ -137,6 +137,10 @@ function bindControls() {
   });
 }
 
+/* ==========================================
+   AVVIO APPLICAZIONE (con debug e protezioni)
+   ========================================== */
+
 async function init() {
   console.log('🚀 [INIT] Avvio applicazione...');
   
@@ -156,12 +160,11 @@ async function init() {
     console.log('✅ [INIT] Auto-refresh attivato');
   } catch (e) {
     console.error('❌ [INIT] Errore critico:', e);
-    ui.hideLoader(); // ← IMPORTANTE: nasconde il loader anche in caso di errore
+    ui.hideLoader(); 
     ui.showToast('Errore inizializzazione: ' + e.message, 'error');
   }
 }
 
-// Versione con TIMEOUT (max 15 secondi) per evitare hang infinito
 function waitForChartJs(timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
@@ -179,74 +182,10 @@ function waitForChartJs(timeoutMs = 15000) {
   });
 }
 
-// Pattern DOM-ready robusto (funziona anche se il DOM è già pronto)
 function onReady(callback) {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', callback);
   } else {
-    // DOM già pronto (script module eseguiti in defer)
-    callback();
-  }
-}
-
-onReady(async () => {
-  console.log('📄 [DOM] Documento pronto');
-  try {
-    await waitForChartJs();
-    await init();
-  } catch (e) {
-    console.error('❌ [BOOT] Errore fatale:', e);
-    ui.hideLoader();
-    ui.showToast(e.message, 'error');
-  }
-});async function init() {
-  console.log('🚀 [INIT] Avvio applicazione...');
-  
-  try {
-    document.getElementById('year').textContent = new Date().getFullYear();
-    ui.setupTabs();
-    bindControls();
-    console.log('✅ [INIT] Controlli inizializzati');
-
-    await refreshAll();
-    console.log('✅ [INIT] Dati storici caricati');
-
-    await renderForecast();
-    console.log('✅ [INIT] Previsioni caricate');
-
-    setInterval(renderForecast, 10 * 60 * 1000);
-    console.log('✅ [INIT] Auto-refresh attivato');
-  } catch (e) {
-    console.error('❌ [INIT] Errore critico:', e);
-    ui.hideLoader(); // ← IMPORTANTE: nasconde il loader anche in caso di errore
-    ui.showToast('Errore inizializzazione: ' + e.message, 'error');
-  }
-}
-
-// Versione con TIMEOUT (max 15 secondi) per evitare hang infinito
-function waitForChartJs(timeoutMs = 15000) {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      if (typeof Chart !== 'undefined') {
-        console.log('✅ [CHART.JS] Libreria caricata');
-        return resolve();
-      }
-      if (Date.now() - start > timeoutMs) {
-        return reject(new Error('Timeout: Chart.js non si è caricato in 15s'));
-      }
-      setTimeout(check, 100);
-    };
-    check();
-  });
-}
-
-// Pattern DOM-ready robusto (funziona anche se il DOM è già pronto)
-function onReady(callback) {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', callback);
-  } else {
-    // DOM già pronto (script module eseguiti in defer)
     callback();
   }
 }
