@@ -39,7 +39,7 @@ function baseOptions(yTitle, unit=''){
     },
     scales:{
       x:{
-        ticks:{color:COLORS.tick, maxRotation:0, autoSkip:true, maxTicksLimit:10, font:{size:10}},
+        ticks:{color:COLORS.tick, maxRotation:0, autoSkip:true, maxTicksLimit:12, font:{size:10}},
         grid:{color:COLORS.grid}
       },
       y:{
@@ -178,15 +178,49 @@ export function renderMonthYearlyHum(labels, data){
 }
 
 // ===== PROFILE =====
+// ✅ MODIFICATO: ora è un grafico a linee con tre curve continue (Max, Media, Min)
 export function renderProfileTemp(labels, max, avg, min){
   getOrCreate('chartProfileTemp', {
-    type:'bar',
+    type:'line',
     data:{
       labels,
       datasets:[
-        {label:'Max', data:max, backgroundColor:'rgba(248,113,113,.7)', borderRadius:4},
-        {label:'Media', data:avg, backgroundColor:'rgba(251,191,36,.7)', borderRadius:4},
-        {label:'Min', data:min, backgroundColor:'rgba(96,165,250,.7)', borderRadius:4}
+        {
+          label:'Max',
+          data:max,
+          borderColor:COLORS.tempMax,
+          backgroundColor:'rgba(248,113,113,.10)',
+          fill:false,
+          tension:.4,
+          pointRadius:3,
+          pointHoverRadius:6,
+          pointBackgroundColor:COLORS.tempMax,
+          borderWidth:2
+        },
+        {
+          label:'Media',
+          data:avg,
+          borderColor:COLORS.tempAvg,
+          backgroundColor:'rgba(251,191,36,.15)',
+          fill:true,
+          tension:.4,
+          pointRadius:3,
+          pointHoverRadius:6,
+          pointBackgroundColor:COLORS.tempAvg,
+          borderWidth:2.5
+        },
+        {
+          label:'Min',
+          data:min,
+          borderColor:COLORS.tempMin,
+          backgroundColor:'rgba(96,165,250,.10)',
+          fill:false,
+          tension:.4,
+          pointRadius:3,
+          pointHoverRadius:6,
+          pointBackgroundColor:COLORS.tempMin,
+          borderWidth:2
+        }
       ]
     },
     options:baseOptions('°C','°C')
