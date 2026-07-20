@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canale Monterano · Meteo Storico &amp; Previsioni</title>
+  <meta name="description" content="Serie storiche ERA5 dal 1965 e previsioni a 7 giorni per Canale Monterano (RM). Aggiornamento automatico ogni 10 minuti.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌤️%3C/text%3E%3C/svg%3E">
+
+  <!-- Preconnect: risparmia ~200-400ms su font e API -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://api.open-meteo.com">
+  <link rel="preconnect" href="https://archive-api.open-meteo.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script defer src="js/config.js"></script>
+  <script defer src="js/api.js"></script>
+  <script defer src="js/charts.js"></script>
+  <script defer src="js/app.js"></script>
+</head>
+<body>
+
+  <!-- Sfondo ambientale: stelle, isobare, grana -->
+  <div class="sky" aria-hidden="true">
+    <div class="stars stars--a"></div>
+    <div class="stars stars--b"></div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ══ Testata stazione ══ -->
+    <header class="masthead reveal">
+      <div class="masthead__id">
+        <span class="live-chip"><span class="live-dot"></span>STAZIONE ATTIVA</span>
+        <h1>Canale <em>Monterano</em></h1>
+        <p class="meta">42.1328° N · 12.1056° E — 392 m s.l.m. · Provincia di Roma</p>
+        <p class="tagline">Serie storiche ERA5 dal 1965 · Previsioni a 7 giorni · sincronizzazione automatica ogni 10 minuti</p>
+      </div>
+      <div class="masthead__live">
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="date" id="today">—</div>
+        <div class="next-update">
+          <svg viewBox="0 0 36 36" class="ring" aria-hidden="true">
+            <circle class="ring-bg" cx="18" cy="18" r="15"/>
+            <circle class="ring-fg" id="ringFg" cx="18" cy="18" r="15"/>
+          </svg>
+          <div><b class="mono" id="countdown">10:00</b><small>prossimo aggiornamento</small></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ══ Adesso: lettura istantanea ══ -->
+    <section class="now reveal" aria-label="Condizioni attuali">
+      <div class="now__main">
+        <div class="now-icon" id="nowIcon">⏳</div>
+        <div class="now-read">
+          <div class="now-temp" id="nowTemp">--<span class="deg">°C</span></div>
+          <p class="now-desc" id="nowDesc">connessione alla stazione…</p>
+          <p class="now-meta mono" id="nowMeta"></p>
+        </div>
+      </div>
+      <ul class="now__stats">
+        <li><span class="k mono">T. max oggi</span><b id="stMax">—</b></li>
+        <li><span class="k mono">T. min oggi</span><b id="stMin">—</b></li>
+        <li><span class="k mono">Pioggia oggi</span><b id="stRain">—</b></li>
+        <li><span class="k mono">Umidità ora</span><b id="stHum">—</b></li>
+        <li><span class="k mono">Prob. pioggia</span><b id="stProb">—</b></li>
+      </ul>
+      <div class="now__spark">
+        <span class="k mono" id="sparkLabel">prossime 24 h</span>
+        <canvas id="spark" height="64"></canvas>
+      </div>
+    </section>
+
+    <!-- ══ Controlli (sticky) ══ -->
+    <div class="controls reveal">
+      <div class="controls__inner">
+        <label class="field"><span>Mese</span><select id="selMonth" aria-label="Mese"></select></label>
+        <label class="field"><span> Anno da</span><select id="selFrom" aria-label="Anno iniziale"></select></label>
+        <label class="field"><span>Anno a</span><select id="selTo" aria-label="Anno finale"></select></label>
+        <button id="btnRefresh" class="btn-refresh" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+          Aggiorna tutto
+        </button>
+        <div class="sync">
+          <div class="progress"><i id="progressFill"></i></div>
+          <p class="status mono" id="statusMsg" data-kind="load" aria-live="polite">Inizializzazione…</p>
+        </div>
+      </div>
+    </div>
+
+    <main>
+
+      <!-- ══ Previsioni 7 giorni ══ -->
+      <section class="reveal" aria-labelledby="hForecast">
+        <header class="sec-head">
+          <div>
+            <span class="kicker">🔮 Previsioni · dati orari</span>
+            <h2 id="hForecast">Prossimi 7 giorni</h2>
+            <p class="subtitle mono" id="subForecast">aggiornamento automatico ogni 10 minuti</p>
+          </div>
+          <div class="tabs" data-section="forecast" data-metric="temp" role="group" aria-label="Metrica previsioni">
+            <button class="tab active" data-metric="temp">🌡️ Temp.</button>
+            <button class="tab" data-metric="rain">🌧️ Pioggia</button>
+            <button class="tab" data-metric="hum">💧 Umidità</button>
+          </div>
+        </header>
+        <div class="days" id="dayCards">
+          <div class="day-card--skel"></div><div class="day-card--skel"></div><div class="day-card--skel"></div>
+          <div class="day-card--skel"></div><div class="day-card--skel"></div><div class="day-card--skel"></div>
+          <div class="day-card--skel"></div>
+        </div>
+        <div class="panel">
+          <div class="chart-box">
+            <canvas id="chartForecast" aria-label="Grafico previsioni orarie" role="img"></canvas>
+            <div class="chart-skel">caricamento previsioni…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ Andamento giornaliero ══ -->
+      <section class="reveal" aria-labelledby="hDaily">
+        <header class="sec-head">
+          <div>
+            <span class="kicker">📅 Serie storica · giornaliero</span>
+            <h2 id="hDaily">Andamento giornaliero · <span class="hl" id="dailyTitle">—</span></h2>
+            <p class="subtitle mono" id="subDaily">giorno per giorno, tutti i parametri</p>
+          </div>
+          <div class="tabs" data-section="daily" data-metric="temp" role="group" aria-label="Metrica giornaliera">
+            <button class="tab active" data-metric="temp">🌡️ Temp.</button>
+            <button class="tab" data-metric="rain">🌧️ Pioggia</button>
+            <button class="tab" data-metric="hum">💧 Umidità</button>
+          </div>
+        </header>
+        <div class="panel">
+          <div class="chart-box">
+            <canvas id="chartDaily" aria-label="Grafico andamento giornaliero" role="img"></canvas>
+            <div class="chart-skel">in attesa serie storiche…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ Profilo mensile storico ══ -->
+      <section class="reveal" aria-labelledby="hProfile">
+        <header class="sec-head">
+          <div>
+            <span class="kicker">📊 Climatologia · 12 mesi</span>
+            <h2 id="hProfile">Profilo mensile storico</h2>
+            <p class="subtitle mono" id="subProfile">media dei 12 mesi su tutti gli anni selezionati</p>
+          </div>
+          <div class="tabs" data-section="profile" data-metric="temp" role="group" aria-label="Metrica profilo">
+            <button class="tab active" data-metric="temp">🌡️ Temp.</button>
+            <button class="tab" data-metric="rain">🌧️ Pioggia</button>
+            <button class="tab" data-metric="hum">💧 Umidità</button>
+          </div>
+        </header>
+        <div class="panel">
+          <div class="chart-box">
+            <canvas id="chartProfile" aria-label="Grafico profilo mensile" role="img"></canvas>
+            <div class="chart-skel">in attesa serie storiche…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ Andamento annuale ══ -->
+      <section class="reveal" aria-labelledby="hAnnual">
+        <header class="sec-head">
+          <div>
+            <span class="kicker">📈 Serie storica · annuale</span>
+            <h2 id="hAnnual">Andamento annuale completo</h2>
+            <p class="subtitle mono" id="subAnnual">serie completa · —</p>
+          </div>
+          <div class="tabs" data-section="annual" data-metric="temp" role="group" aria-label="Metrica annuale">
+            <button class="tab active" data-metric="temp">🌡️ Temp.</button>
+            <button class="tab" data-metric="rain">🌧️ Pioggia</button>
+            <button class="tab" data-metric="hum">💧 Umidità</button>
+          </div>
+        </header>
+        <div class="panel">
+          <div class="chart-box">
+            <canvas id="chartAnnual" aria-label="Grafico andamento annuale" role="img"></canvas>
+            <div class="chart-skel">in attesa serie storiche…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ Mese selezionato negli anni ══ -->
+      <section class="reveal" aria-labelledby="hMonthYears">
+        <header class="sec-head">
+          <div>
+            <span class="kicker">📉 Confronto pluriennale</span>
+            <h2 id="hMonthYears"><span id="myMonth">—</span> negli anni</h2>
+            <p class="subtitle mono" id="subMonthYears">—</p>
+          </div>
+          <div class="tabs" data-section="monthyears" data-metric="temp" role="group" aria-label="Metrica pluriennale">
+            <button class="tab active" data-metric="temp">🌡️ Temp.</button>
+            <button class="tab" data-metric="rain">🌧️ Pioggia</button>
+            <button class="tab" data-metric="hum">💧 Umidità</button>
+          </div>
+        </header>
+        <div class="panel">
+          <div class="chart-box">
+            <canvas id="chartMonthYears" aria-label="Grafico mese negli anni" role="img"></canvas>
+            <div class="chart-skel">in attesa serie storiche…</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer reveal">
+      <div>
+        <b class="mono">Canale Monterano · Meteo</b>
+        <p>Dati storici ERA5/ECMWF via Open-Meteo Archive · previsioni via Open-Meteo Forecast. Uso non professionale: per allerte fare sempre riferimento alla Protezione Civile.</p>
+      </div>
+      <div>
+        <span class="k mono">Sorgenti dati</span>
+        <p><a href="https://open-meteo.com/" target="_blank" rel="noopener">open-meteo.com</a> · ERA5 Reanalysis<br>Coordinate 42.1328°N, 12.1056°E · fuso Europe/Rome</p>
+      </div>
+      <div>
+        <span class="k mono">Note tecniche</span>
+        <p>Cache locale per le annate storiche (nessuna ri-richiesta) · 5 richieste concorrenti con backoff · auto-refresh 10 min · deploy statico su Netlify.</p>
+      </div>
+    </footer>
+
+  </div>
+
+  <noscript><p style="padding:2rem;font-family:monospace">Questa applicazione richiede JavaScript attivo.</p></noscript>
+</body>
+</html>
