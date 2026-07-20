@@ -8,98 +8,96 @@ const currentYear = new Date().getFullYear();
 const state = {
   month: new Date().getMonth() + 1,
   yearFrom: 2000,
-  yearTo: currentYear, // ← Usa l'anno corrente, non un anno futuro fisso
+  yearTo: currentYear,
   archive: null
 };
 
-async function loadArchive(onProgress){
+async function loadArchive(onProgress) {
   state.archive = await fetchArchive(state.yearFrom, state.yearTo, onProgress);
 }
 
-function renderMonthDaily(){
+function renderMonthDaily() {
   const data = extractMonthDaily(state.archive, state.yearTo, state.month);
-  if(!data || !data.length) return;
+  if (!data || !data.length) return;
   document.getElementById('monthDailyTitle').textContent = `${ui.monthName(state.month)} ${state.yearTo}`;
-  const labels = data.map(d=>d.date.slice(8));
-  charts.renderMonthDailyTemp(labels, data.map(d=>d.tmax), data.map(d=>d.tmin));
-  charts.renderMonthDailyPrecip(labels, data.map(d=>d.precip));
-  charts.renderMonthDailyHum(labels, data.map(d=>d.hum));
+  const labels = data.map(d => d.date.slice(8));
+  charts.renderMonthDailyTemp(labels, data.map(d => d.tmax), data.map(d => d.tmin));
+  charts.renderMonthDailyPrecip(labels, data.map(d => d.precip));
+  charts.renderMonthDailyHum(labels, data.map(d => d.hum));
 }
 
-function renderMonthYearly(){
+function renderMonthYearly() {
   const data = extractMonthYearly(state.archive, state.month, state.yearFrom, state.yearTo);
-  if(!data.length) return;
+  if (!data.length) return;
   document.getElementById('monthYearlyTitle').textContent = ui.monthName(state.month);
-  const labels = data.map(d=>d.year);
-  charts.renderMonthYearlyTemp(labels, data.map(d=>d.tmax), data.map(d=>d.tavg), data.map(d=>d.tmin));
-  charts.renderMonthYearlyPrecip(labels, data.map(d=>d.precip));
-  charts.renderMonthYearlyHum(labels, data.map(d=>d.hum));
+  const labels = data.map(d => d.year);
+  charts.renderMonthYearlyTemp(labels, data.map(d => d.tmax), data.map(d => d.tavg), data.map(d => d.tmin));
+  charts.renderMonthYearlyPrecip(labels, data.map(d => d.precip));
+  charts.renderMonthYearlyHum(labels, data.map(d => d.hum));
 }
 
-function renderProfile(){
+function renderProfile() {
   const data = extractProfile(state.archive, state.yearFrom, state.yearTo);
   const valid = data.filter(Boolean);
-  if(!valid.length) return;
-  const labels = data.map((_,i)=>ui.monthShort(i+1));
-  charts.renderProfileTemp(labels, data.map(d=>d?.tmax), data.map(d=>d?.tavg), data.map(d=>d?.tmin));
-  charts.renderProfilePrecip(labels, data.map(d=>d?.precip));
-  charts.renderProfileHum(labels, data.map(d=>d?.hum));
+  if (!valid.length) return;
+  const labels = data.map((_, i) => ui.monthShort(i + 1));
+  charts.renderProfileTemp(labels, data.map(d => d?.tmax), data.map(d => d?.tavg), data.map(d => d?.tmin));
+  charts.renderProfilePrecip(labels, data.map(d => d?.precip));
+  charts.renderProfileHum(labels, data.map(d => d?.hum));
 }
 
-function renderYearly(){
+function renderYearly() {
   const data = extractYearly(state.archive, state.yearFrom, state.yearTo);
-  if(!data.length) return;
-  const labels = data.map(d=>d.year);
-  charts.renderYearlyTemp(labels, data.map(d=>d.tavg));
-  charts.renderYearlyPrecip(labels, data.map(d=>d.precip));
-  charts.renderYearlyHum(labels, data.map(d=>d.hum));
+  if (!data.length) return;
+  const labels = data.map(d => d.year);
+  charts.renderYearlyTemp(labels, data.map(d => d.tavg));
+  charts.renderYearlyPrecip(labels, data.map(d => d.precip));
+  charts.renderYearlyHum(labels, data.map(d => d.hum));
 }
 
-async function renderForecast(){
-  try{
+async function renderForecast() {
+  try {
     const data = await fetchForecast();
     ui.renderForecastGrid(data.daily);
 
-    // hourly -> daily labels
-    const dailyLabels = data.daily.time.map(t=>{
+    const dailyLabels = data.daily.time.map(t => {
       const d = new Date(t);
-      return d.toLocaleDateString('it-IT',{weekday:'short',day:'numeric'});
+      return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
     });
     charts.renderForecastTemp(dailyLabels, data.daily.temperature_2m_max, data.daily.temperature_2m_min);
     charts.renderForecastPrecip(dailyLabels, data.daily.precipitation_sum, data.daily.precipitation_probability_max);
 
-    // umidità media giornaliera da hourly
-    const humAvg = data.daily.time.map((t,i)=>{
+    const humAvg = data.daily.time.map((t, i) => {
       const day = t;
-      let sum=0, count=0;
-      for(let j=0;j<data.hourly.time.length;j++){
-        if(data.hourly.time[j].startsWith(day) && data.hourly.relative_humidity_2m[j]!=null){
+      let sum = 0, count = 0;
+      for (let j = 0; j < data.hourly.time.length; j++) {
+        if (data.hourly.time[j].startsWith(day) && data.hourly.relative_humidity_2m[j] != null) {
           sum += data.hourly.relative_humidity_2m[j];
           count++;
         }
       }
-      return count ? sum/count : null;
+      return count ? sum / count : null;
     });
     charts.renderForecastHum(dailyLabels, humAvg);
-  }catch(e){
-    ui.showToast('Errore previsioni: '+e.message, 'error');
+  } catch (e) {
+    ui.showToast('Errore previsioni: ' + e.message, 'error');
   }
 }
 
-async function refreshAll(){
+async function refreshAll() {
   ui.showLoader('Scarico dati storici…');
-  try{
-    await loadArchive((msg)=>{ document.getElementById('loaderText').textContent = msg; });
+  try {
+    await loadArchive((msg) => { document.getElementById('loaderText').textContent = msg; });
     renderMonthDaily();
     renderMonthYearly();
     renderProfile();
     renderYearly();
     ui.setLastUpdate();
-    ui.showToast('Dati aggiornati','success');
-  }catch(e){
+    ui.showToast('Dati aggiornati', 'success');
+  } catch (e) {
     console.error(e);
-    ui.showToast('Errore caricamento: '+e.message, 'error');
-  }finally{
+    ui.showToast('Errore caricamento: ' + e.message, 'error');
+  } finally {
     ui.hideLoader();
   }
 }
@@ -110,8 +108,6 @@ function bindControls() {
   const selTo = document.getElementById('selYearTo');
 
   ui.populateMonthSelect(selMonth);
-  
-  // ← Modifica qui: limita gli anni tra 1965 e l'anno corrente
   ui.populateYearSelect(selFrom, 1965, currentYear, state.yearFrom);
   ui.populateYearSelect(selTo, 1965, currentYear, state.yearTo);
 
@@ -141,29 +137,27 @@ function bindControls() {
   });
 }
 
-async function init(){
+async function init() {
   document.getElementById('year').textContent = new Date().getFullYear();
   ui.setupTabs();
   bindControls();
   await refreshAll();
   await renderForecast();
 
-  // auto-refresh ogni 10 min
-  setInterval(renderForecast, 10*60*1000);
+  setInterval(renderForecast, 10 * 60 * 1000);
 }
 
-// Avvio quando Chart.js è pronto
-function waitForChartJs(){
-  return new Promise((resolve)=>{
-    const check = ()=>{
-      if(typeof Chart !== 'undefined') resolve();
+function waitForChartJs() {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (typeof Chart !== 'undefined') resolve();
       else setTimeout(check, 100);
     };
     check();
   });
 }
 
-document.addEventListener('DOMContentLoaded', async ()=>{
+document.addEventListener('DOMContentLoaded', async () => {
   await waitForChartJs();
   init();
 });
