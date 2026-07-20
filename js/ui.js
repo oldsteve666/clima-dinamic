@@ -23,13 +23,13 @@ export function populateMonthSelect(sel){
   sel.value = new Date().getMonth()+1;
 }
 
-export function populateYearSelect(sel, from, to, selected) {
+export function populateYearSelect(sel, from, to, selected){
   sel.innerHTML = '';
   const currentYear = new Date().getFullYear();
   const maxYear = Math.min(to, currentYear);
-  const minYear = Math.max(from, 1940); // Open-Meteo archive arriva fino al 1940
+  const minYear = Math.max(from, 1940);
   
-  for (let y = maxYear; y >= minYear; y--) {
+  for(let y=maxYear; y>=minYear; y--){
     const opt = document.createElement('option');
     opt.value = y;
     opt.textContent = y;
@@ -75,10 +75,14 @@ export function showToast(msg, type='info', duration=3500){
 export function showLoader(text='Caricamento…'){
   const l = document.getElementById('loader');
   document.getElementById('loaderText').textContent = text;
+  l.style.display = 'flex';
   l.hidden = false;
 }
+
 export function hideLoader(){
-  document.getElementById('loader').hidden = true;
+  const l = document.getElementById('loader');
+  l.style.display = 'none';
+  l.hidden = true;
 }
 
 export function setLastUpdate(){
@@ -98,9 +102,10 @@ export function setupTabs(){
       const target = tab.dataset.tab;
       tabs.forEach(t=>t.classList.toggle('active', t===tab));
       panels.forEach(p=>{
-        const match = p.dataset.panel === target;
-        p.hidden = !match;
+        p.hidden = p.dataset.panel !== target;
       });
+      // TRICK: forza Chart.js a ricalcolare le dimensioni dei grafici nel tab appena mostrato
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
     });
   });
 }
