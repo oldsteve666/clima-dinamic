@@ -27,8 +27,13 @@
   --mono:'JetBrains Mono',ui-monospace,monospace;
 }
 
+/* ============ RESET & BASE ============ */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+
+/* FIX GLOBALE: forza la scomparsa di qualsiasi elemento con attributo hidden */
+[hidden]{display:none !important;}
+
 body{
   font-family:var(--font);
   color:var(--text);
@@ -235,6 +240,9 @@ canvas{max-width:100%}
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:1rem;z-index:1000;
 }
+/* FIX: assicura che il loader sparisca quando riceve l'attributo hidden */
+.loader[hidden]{ display:none !important; }
+
 .loader__spinner{
   width:48px;height:48px;
   border:3px solid var(--border);
