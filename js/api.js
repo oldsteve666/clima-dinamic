@@ -18,21 +18,23 @@ export function debounce(fn, ms=300){
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// ERA5 ha un ritardo di ~5 giorni: calcola l'ultima data disponibile
-function getSafeEndDate(){
+// ✅ Data odierna (UTC). L'API restituisce automaticamente i dati fino
+// all'ultimo giorno realmente disponibile (ERA5 ha un ritardo di ~5 giorni,
+// gestito lato server: non serve "tagliare" i dati a priori).
+function getTodayDate(){
+  return new Date().toISOString().split('T')[0];
+}
+
+// ✅ Data conservativa (oggi - 7 giorni) usata SOLO come fallback
+// nel caso improbabile in cui l'API rifiuti la data odierna.
+function getConservativeDate(){
   const d = new Date();
-  d.setDate(d.getDate() - 6);
+  d.setDate(d.getDate() - 7);
   return d.toISOString().split('T')[0];
 }
 
-// ✅ Richiesta piccola: un solo anno, solo umidità oraria (payload -66%)
-async function fetchYearFromAPI(year){
-  const safeEnd = getSafeEndDate();
-  const start = `${year}-01-01`;
-  let end = `${year}-12-31`;
-  if (end > safeEnd) end = safeEnd;
-  if (start > safeEnd) return null; // anno futuro: nessun dato
-
+// Esegue la chiamata HTTP all'API archive
+async function doArchiveFetch(start, end){
   const params = new URLSearchParams({
     latitude: LAT,
     longitude: LON,
@@ -51,6 +53,31 @@ async function fetchYearFromAPI(year){
     throw err;
   }
   return await res.json();
+}
+
+// ✅ Scarica un singolo anno chiedendo i dati fino all'ULTIMO giorno disponibile.
+// Se l'API rifiuta la data odierna (errore 400), riprova con una data conservativa.
+async function fetchYearFromAPI(year){
+  const currentYear = new Date().getFullYear();
+  const start = `${year}-01-01`;
+
+  // Anni passati → anno completo. Anno corrente → fino a oggi.
+  let end = year >= currentYear ? getTodayDate() : `${year}-12-31`;
+  if (start > end) return null; // anno futuro: nessun dato
+
+  try {
+    // Tenta di ottenere il massimo dei dati disponibili
+    return await doArchiveFetch(start, end);
+  } catch (e) {
+    // Fallback: se l'API rifiuta la data recente, riprova con oggi-7
+    if (e.status === 400 && year >= currentYear) {
+      const safeEnd = getConservativeDate();
+      if (start <= safeEnd) {
+        return await doArchiveFetch(start, safeEnd);
+      }
+    }
+    throw e;
+  }
 }
 
 // ✅ Cache per singolo anno + fallback su dati scaduti
@@ -98,7 +125,7 @@ function mergeArchiveData(list){
 }
 
 /**
- * ✅ NUOVA ARCHITETTURA: scarica anno per anno.
+ * ✅ Architettura per anno:
  * - Anni già in cache → istantanei, zero richieste API
  * - Solo gli anni mancanti vengono scaricati (con pausa 200ms)
  * - In caso di 429 → usa gli anni già raccolti + cache scaduta
@@ -176,7 +203,7 @@ export async function fetchForecast(){
   return data;
 }
 
-// ===== FUNZIONI DI ESTRAZIONE (invariate) =====
+// ===== FUNZIONI DI ESTRAZIONE =====
 
 export function extractMonthDaily(archiveData, year, month){
   const daily = archiveData.daily;
